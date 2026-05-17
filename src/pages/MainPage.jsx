@@ -63,14 +63,14 @@ function FeaturedMovie({ movie, onOpen }) {
               <button
                 type="button"
                 onClick={() => setIsExpanded((current) => !current)}
-                className="mt-3 text-sm font-semibold text-[#f6c563] transition hover:text-[#ffd979]"
+                className="mt-1 text-sm font-semibold text-[#f6c563] transition hover:text-[#ffd979]"
               >
                 {isExpanded ? 'Show less' : 'Read more'}
               </button>
             ) : null}
           </div>
 
-          <div className="mt-6 flex flex-wrap gap-3 text-sm text-slate-200">
+          <div className="mt-2 flex flex-wrap gap-3 text-sm text-slate-200">
             <span className="rounded-full border border-white/10 bg-white/8 px-2 py-1.5">
               {movie.year ?? 'Unknown year'}
             </span>
