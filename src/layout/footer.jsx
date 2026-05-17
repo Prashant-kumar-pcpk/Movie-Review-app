@@ -1,39 +1,21 @@
-
 export default function Footer() {
   return (
-    <footer className="bg-gray-900/50 text-white py-6 mt-10 shadow-lg">
-      
-      <div className="max-w-6xl mx-auto px-4 text-center space-y-3">
-        
-        {/* App Name */}
-        <h2 className="text-xl font-bold tracking-wide">
-            Movie Review App
-        </h2>
-
-        {/* Divider */}
-        <div className="w-20 h-1 bg-white mx-auto rounded"></div>
-
-        {/* Copyright */}
-        <p className="text-sm opacity-90">
-          © 2026 Movie Review App. All rights reserved.
-        </p>
-
-        {/* Developer Credit */}
-        <p className="text-sm font-medium">
-          Designed & Developed by 
-          <span className="ml-1 font-semibold underline decoration-yellow-300">
-            Prashant Kumar
-          </span>
-        </p>
-
-        {/* Social Icons (optional UI touch) */}
-        <div className="flex justify-center gap-4 pt-2">
-          <span className="hover:scale-110 transition cursor-pointer">🌐</span>
-          <span className="hover:scale-110 transition cursor-pointer">🐱</span>
-          <span className="hover:scale-110 transition cursor-pointer">💼</span>
+    <footer className="mt-12 border-t border-white/10 bg-slate-950/40 py-8 text-white">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="font-display text-2xl font-bold tracking-tight">Movie Review App</h2>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400">
+              Built with React and TailwindCSS for fast browsing, responsive filtering, and
+              local-first movie ratings.
+            </p>
+          </div>
+          <div className="text-sm text-slate-400">
+            <p>Responsive UI, detailed movie pages, and reusable components.</p>
+            <p className="mt-1">Copyright 2026 Prashant kumar. All rights reserved.</p>
+          </div>
         </div>
-
       </div>
     </footer>
-  );
+  )
 }

@@ -12,7 +12,7 @@ export default {
         'cinema-accent': '#f97316',
       },
       fontFamily: {
-        display: ['system-ui', 'Segoe UI', 'Roboto', 'Helvetica', 'Arial', 'sans-serif'],
+        display: ['Sora', 'Plus Jakarta Sans', 'ui-sans-serif', 'system-ui', 'sans-serif'],
       },
     },
   },

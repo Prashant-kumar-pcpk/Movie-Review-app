@@ -1,153 +1,218 @@
-import { useMemo, useState } from 'react'
-import { movies, allGenres, yearBounds } from './data/movies'
-import { usePersistedRatings } from './hooks/usePersistedRatings'
-import { MovieCard } from './components/MovieCard'
-import { MovieDetailModal } from './components/MovieDetailModal'
-import { displayedAverage } from './utils/rating'
-import Header from './layout/Header.jsx'
-import Footer from './layout/footer.jsx'
+import { useEffect, useMemo, useState } from 'react'
+import { MainPage } from './pages/MainPage.jsx'
+import { MovieDetailsPage } from './pages/MovieDetailsPage.jsx'
+import { useDebouncedValue } from './hooks/useDebouncedValue.jsx'
+import { useMovieNavigation } from './hooks/useMovieNavigation.jsx'
+import { usePersistedRatings } from './hooks/usePersistedRatings.jsx'
+import {
+  DEFAULT_SEARCH_TERM,
+  fetchMovieById,
+  fetchMovies,
+  getMovieApiConfigStatus,
+} from './services/omdb.jsx'
+import { displayedAverage } from './utils/rating.jsx'
 
 export default function App() {
   const [query, setQuery] = useState('')
   const [genre, setGenre] = useState('')
-  const [yearMin, setYearMin] = useState((yearBounds.min))
-  const [yearMax, setYearMax] = useState((yearBounds.max))
+  const [releaseYear, setReleaseYear] = useState('')
   const [minRating, setMinRating] = useState('0')
-  const [selected, setSelected] = useState(null)
+  const [movies, setMovies] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [retryCount, setRetryCount] = useState(0)
+  const [movieCache, setMovieCache] = useState({})
+  const [detailsLoading, setDetailsLoading] = useState(false)
+  const [detailsError, setDetailsError] = useState('')
+  const debouncedQuery = useDebouncedValue(query, 450)
+  const route = useMovieNavigation()
+  const apiConfig = getMovieApiConfigStatus()
+  const { ratings, setRating, getRating } = usePersistedRatings()
 
-  const { setRating, getRating } = usePersistedRatings()
+  useEffect(() => {
+    let cancelled = false
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    const yMin = (yearMin) || yearBounds.min
-    const yMax = (yearMax) || yearBounds.max
-    const rMin = (minRating) || 0
+    async function loadMovies() {
+      setLoading(true)
+      setError('')
 
-    return movies.filter((m) => {
-      if (q && !m.title.toLowerCase().includes(q)) return false
-      if (genre && !m.genres.includes(genre)) return false
-      if (m.year < Math.min(yMin, yMax) || m.year > Math.max(yMin, yMax)) return false
-      const user = getRating(m.id)
-      const avg = displayedAverage(m.averageRating, user)
-      if (avg < rMin) return false
+      try {
+        const response = await fetchMovies(debouncedQuery)
+        if (!cancelled) {
+          setMovies(response)
+          setMovieCache((prev) => {
+            const next = { ...prev }
+            response.forEach((movie) => {
+              next[movie.id] = movie
+            })
+            return next
+          })
+        }
+      } catch (fetchError) {
+        if (!cancelled) {
+          setMovies([])
+          setError(
+            fetchError instanceof Error
+              ? fetchError.message
+              : 'Something went wrong while loading movies.',
+          )
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false)
+        }
+      }
+    }
+
+    loadMovies()
+
+    return () => {
+      cancelled = true
+    }
+  }, [debouncedQuery, retryCount])
+
+  useEffect(() => {
+    if (route.name !== 'details' || !route.movieId) {
+      setDetailsLoading(false)
+      setDetailsError('')
+      return
+    }
+
+    if (movieCache[route.movieId]) {
+      setDetailsError('')
+      setDetailsLoading(false)
+      return
+    }
+
+    let cancelled = false
+
+    async function loadMovieDetails() {
+      setDetailsLoading(true)
+      setDetailsError('')
+
+      try {
+        const movie = await fetchMovieById(route.movieId)
+        if (!cancelled) {
+          setMovieCache((prev) => ({ ...prev, [movie.id]: movie }))
+        }
+      } catch (fetchError) {
+        if (!cancelled) {
+          setDetailsError(
+            fetchError instanceof Error
+              ? fetchError.message
+              : 'Unable to load this movie right now.',
+          )
+        }
+      } finally {
+        if (!cancelled) {
+          setDetailsLoading(false)
+        }
+      }
+    }
+
+    loadMovieDetails()
+
+    return () => {
+      cancelled = true
+    }
+  }, [movieCache, route])
+
+  const genres = useMemo(
+    () =>
+      [...new Set(movies.flatMap((movie) => movie.genres || []))].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [movies],
+  )
+
+  const years = useMemo(
+    () =>
+      [...new Set(movies.map((movie) => movie.year).filter(Boolean))].sort((a, b) => b - a),
+    [movies],
+  )
+
+  const filteredMovies = useMemo(() => {
+    const ratingFloor = Number(minRating) || 0
+
+    return movies.filter((movie) => {
+      if (genre && !movie.genres?.includes(genre)) return false
+      if (releaseYear && String(movie.year) !== releaseYear) return false
+
+      const userRating = getRating(movie.id)
+      const average = displayedAverage(movie.averageRating, userRating)
+      if (average < ratingFloor) return false
+
       return true
     })
-  }, [query, genre, yearMin, yearMax, minRating, getRating])
+  }, [movies, genre, releaseYear, minRating, getRating])
 
-  const years = useMemo(() => {
-    const ys = [...new Set(movies.map((m) => m.year))].sort((a, b) => b - a)
-    return ys
-  }, [])
+  const featuredMovie = movies[0] || null
+
+  const topRatedMovie = useMemo(
+    () =>
+      [...movies].sort((left, right) => Number(right.imdbRating) - Number(left.imdbRating))[0] ||
+      null,
+    [movies],
+  )
+
+  const activeSearchLabel = debouncedQuery.trim() || DEFAULT_SEARCH_TERM
+  const selectedMovie =
+    route.name === 'details' && route.movieId ? movieCache[route.movieId] || null : null
+
+  function resetFilters() {
+    setGenre('')
+    setReleaseYear('')
+    setMinRating('0')
+  }
+
+  if (route.name === 'details' && route.movieId) {
+    return (
+      <MovieDetailsPage
+        movie={selectedMovie}
+        loading={detailsLoading}
+        error={detailsError}
+        onBack={route.goHome}
+        onRetry={() => {
+          setMovieCache((prev) => {
+            const next = { ...prev }
+            delete next[route.movieId]
+            return next
+          })
+          setRetryCount((count) => count + 1)
+        }}
+        userRating={selectedMovie ? getRating(selectedMovie.id) : null}
+        ratings={ratings}
+        onRate={(movieId, stars) => setRating(movieId, stars)}
+      />
+    )
+  }
 
   return (
-    <div className="min-h-screen  bg-gradient-to-br from-purple-900 via-yellow-200 to-violet-800 text-white">
-
-      {/* Header */}
-      <Header />
-
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
-        <div className="flex flex-col gap-4 rounded-2xl bg-cyan-900/40 p-4 ring-1 ring-white/5 sm:p-6">
-          <label className="block"> 
-            <span className="text-sm font-semibold uppercase tracking-wide text-black/80 dark:text-white/80">Search by title</span>
-            <input
-              type="search"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="e.g. Inception"
-              className="mt-2  w-full rounded-2xl border border-cinema-700 bg-cinema-950/80 px-4 py-3 text-white placeholder:text-cinema-muted focus:border-cinema-accent focus:outline-none focus:ring-1 focus:ring-cinema-accent"
-            />
-          </label>
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <label className="block sm:col-span-2 lg:col-span-1">
-              <span className="text-xs font-medium uppercase tracking-wide  text-black/80 dark:text-white/80">Genre</span>
-              <select
-                value={genre}
-                onChange={(e) => setGenre(e.target.value)}
-                className="mt-2 w-full rounded-2xl border border-cinema-700 bg-cinema-950/80 px-4 py-3 text-white focus:border-cinema-accent focus:outline-none focus:ring-1 focus:ring-cinema-accent"
-              >
-                <option value="">All genres</option>
-                {allGenres.map((g) => (
-                  <option key={g} value={g}>
-                    {g}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="text-xs font-medium uppercase tracking-wide text-black/80 dark:text-white/80">Year from</span>
-              <select
-                value={yearMin}
-                onChange={(e) => setYearMin(e.target.value)}
-                className="mt-2 w-full rounded-2xl border border-cinema-700 bg-cinema-950/80 px-4 py-3 text-white focus:border-cinema-accent focus:outline-none focus:ring-1 focus:ring-cinema-accent"
-              >
-                {years.map((y) => (
-                  <option key={`min-${y}`} value={String(y)}>
-                    {y}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="text-xs font-medium uppercase tracking-wide  text-black/80 dark:text-white/80">Year to</span>
-              <select
-                value={yearMax}
-                onChange={(e) => setYearMax(e.target.value)}
-                className="mt-2 w-full rounded-2xl border border-cinema-700 bg-cinema-950/80 px-4 py-3 text-white focus:border-cinema-accent focus:outline-none focus:ring-1 focus:ring-cinema-accent"
-              >
-                {years.map((y) => (
-                  <option key={`max-${y}`} value={String(y)}>
-                    {y}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="text-xs font-medium uppercase tracking-wide text-black/80 dark:text-white/80">Min. average</span>
-              <select
-                value={minRating}
-                onChange={(e) => setMinRating(e.target.value)}
-                className="mt-2 w-full rounded-2xl border border-cinema-700 bg-cinema-950/80 px-4 py-3 text-white focus:border-cinema-accent focus:outline-none focus:ring-1 focus:ring-cinema-accent"
-              >
-                <option value="0">Any</option>
-                <option value="3">3+ stars</option>
-                <option value="3.5">3.5+ stars</option>
-                <option value="4">4+ stars</option>
-                <option value="4.5">4.5+ stars</option>
-              </select>
-            </label>
-          </div>
-
-          <p className="text-sm font-semibold  text-black/80 dark:text-white/80">
-            Showing <span className=" px-1.5 font-bold text-white">{filtered.length}</span> of {movies.length} titles
-          </p>
-        </div>
-
-        {filtered.length === 0 ? (
-          <p className="mt-12 text-center text-cinema-muted">No movies match your filters. Try clearing search or filters.</p>
-        ) : (
-          <ul className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filtered.map((movie) => (
-              <li key={movie.id}>
-                <MovieCard movie={movie} userRating={getRating(movie.id)} onSelect={setSelected} />
-              </li>
-            ))}
-          </ul>
-        )}
-      </main>
-
-      <MovieDetailModal
-        movie={selected}
-        userRating={selected ? getRating(selected.id) : null}
-        onRate={(id, stars) => setRating(id, stars)}
-        onClose={() => setSelected(null)}
-      />
-
-      {/* Footer */}
-      <Footer />
-    </div>
+    <MainPage
+      loading={loading}
+      movies={movies}
+      filteredMovies={filteredMovies}
+      featuredMovie={featuredMovie}
+      topRatedMovie={topRatedMovie}
+      activeSearchLabel={activeSearchLabel}
+      apiConfig={apiConfig}
+      error={error}
+      resetFilters={resetFilters}
+      retryCount={retryCount}
+      setRetryCount={setRetryCount}
+      query={query}
+      setQuery={setQuery}
+      genre={genre}
+      setGenre={setGenre}
+      genres={genres}
+      releaseYear={releaseYear}
+      setReleaseYear={setReleaseYear}
+      years={years}
+      minRating={minRating}
+      setMinRating={setMinRating}
+      ratings={ratings}
+      getRating={getRating}
+      onSelectMovie={(movie) => route.goToMovie(movie.id)}
+    />
   )
 }

@@ -5,7 +5,7 @@ const FULL = 5
 function StarIcon({ filled, half, gradientId }) {
   return (
     <svg
-      className={`h-4 w-4 shrink-0 sm:h-5 sm:w-5 ${filled || half ? 'text-cinema-accent' : 'text-cinema-700'}`}
+      className={`h-4 w-4 shrink-0 sm:h-5 sm:w-5 ${filled || half ? 'text-[#f6c563]' : 'text-cinema-700'}`}
       viewBox="0 0 20 20"
       fill="currentColor"
       aria-hidden
@@ -14,7 +14,7 @@ function StarIcon({ filled, half, gradientId }) {
         <defs>
           <linearGradient id={gradientId}>
             <stop offset="50%" stopColor="currentColor" />
-            <stop offset="50%" stopColor="rgb(37 43 56)" stopOpacity="1" />
+            <stop offset="50%" stopColor="rgb(52 52 70)" stopOpacity="1" />
           </linearGradient>
         </defs>
       ) : null}
@@ -26,22 +26,27 @@ function StarIcon({ filled, half, gradientId }) {
   )
 }
 
-/** Read-only star display for a 1–5 value (supports halves for averages). */
 export function StarRow({ value, label, className = '' }) {
   const gid = useId().replace(/:/g, '')
   const v = Math.min(FULL, Math.max(0, Number(value) || 0))
   const stars = []
-  for (let i = 1; i <= FULL; i++) {
+
+  for (let i = 1; i <= FULL; i += 1) {
     if (v >= i) stars.push({ key: i, filled: true, half: false })
     else if (v >= i - 0.5) stars.push({ key: i, filled: false, half: true })
     else stars.push({ key: i, filled: false, half: false })
   }
 
   return (
-    <div className={`flex flex-wrap items-center gap-1 ${className}`}>
+    <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
       <span className="flex gap-0.5" role="img" aria-label={label ?? `Rating ${v.toFixed(1)} out of 5`}>
-        {stars.map((s) => (
-          <StarIcon key={s.key} filled={s.filled} half={s.half} gradientId={`${gid}-h${s.key}`} />
+        {stars.map((star) => (
+          <StarIcon
+            key={star.key}
+            filled={star.filled}
+            half={star.half}
+            gradientId={`${gid}-h${star.key}`}
+          />
         ))}
       </span>
       <span className="text-sm text-cinema-muted">{v.toFixed(1)}</span>
